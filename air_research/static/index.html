@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AIR — AI Intermediate Representation</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="header">
+  <div class="header-inner">
+    <div class="brand">
+      <div class="brand-logo">AIR</div>
+      <div class="brand-sub">AI Intermediate Representation <span class="version-tag">v1.0</span></div>
+    </div>
+    <div class="header-right">
+      <div class="status-dot" id="statusDot"></div>
+      <span class="status-text" id="statusText">Connecting…</span>
+      <a href="benchmark.html" class="nav-link">Benchmark →</a>
+    </div>
+  </div>
+</header>
+
+<div class="main-layout">
+
+  <!-- Left Panel: Controls -->
+  <aside class="left-panel">
+
+    <div class="card">
+      <div class="card-title">Model</div>
+      <select id="modelSelect" class="select-input">
+        <option>Loading…</option>
+      </select>
+      <div class="hint">Via LM Studio on localhost:1234</div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Prompt</div>
+      <textarea id="promptInput" class="textarea" rows="6"
+        placeholder="Describe what to generate…
+
+Examples:
+• Bar chart of Q1–Q4 sales: 120K, 185K, 140K, 210K
+• Pricing page: Basic $9/mo, Pro $29/mo, Enterprise custom
+• 5-slide investor pitch: problem, solution, traction, ask, close
+• Welcome email for SaaS users, CTA: Open Dashboard
+• Contact form with name, email, subject, message"></textarea>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Quick Examples</div>
+      <div class="example-grid">
+        <button class="ex-btn" onclick="setEx('chart')">📊 Chart</button>
+        <button class="ex-btn" onclick="setEx('pricing')">💳 Pricing</button>
+        <button class="ex-btn" onclick="setEx('form')">📝 Form</button>
+        <button class="ex-btn" onclick="setEx('deck')">🎞 Slides</button>
+        <button class="ex-btn" onclick="setEx('hero')">🚀 Hero</button>
+        <button class="ex-btn" onclick="setEx('email')">📧 Email</button>
+        <button class="ex-btn" onclick="setEx('dashboard')">📈 Dashboard</button>
+        <button class="ex-btn" onclick="setEx('table')">🗂 Table</button>
+      </div>
+    </div>
+
+    <button id="generateBtn" class="generate-btn" onclick="generate()">
+      ▶ Generate with AIR
+    </button>
+
+    <div id="pipelineStatus" class="pipeline-status hidden">
+      <div class="pipeline-title">Pipeline Stages</div>
+      <div id="stageList"></div>
+    </div>
+
+  </aside>
+
+  <!-- Center: Preview -->
+  <main class="center-panel">
+    <div class="preview-header">
+      <div class="preview-title">Output Preview</div>
+      <div class="preview-actions">
+        <button class="action-btn" id="copyHtmlBtn" onclick="copyHtml()" disabled>Copy HTML</button>
+        <button class="action-btn" id="openNewBtn" onclick="openNew()" disabled>Open in Tab ↗</button>
+      </div>
+    </div>
+
+    <div id="emptyState" class="empty-state">
+      <div class="empty-icon">◎</div>
+      <div class="empty-title">Ready to generate</div>
+      <div class="empty-sub">Enter a prompt and click Generate.<br>AIR will compress it to a semantic instruction, reconstruct the full output, and verify it before delivery.</div>
+      <div class="pipeline-diagram">
+        <div class="pd-step"><span class="pd-num">1</span><span class="pd-label">Semantic Layer</span><span class="pd-detail">LLM → AIR JSON</span></div>
+        <div class="pd-arrow">→</div>
+        <div class="pd-step"><span class="pd-num">2</span><span class="pd-label">Syntax Layer</span><span class="pd-detail">AIR → Full Output</span></div>
+        <div class="pd-arrow">→</div>
+        <div class="pd-step"><span class="pd-num">3</span><span class="pd-label">Verification</span><span class="pd-detail">Sandbox Validation</span></div>
+      </div>
+    </div>
+
+    <div id="loadingState" class="loading-state hidden">
+      <div class="loading-spinner"></div>
+      <div class="loading-label" id="loadingLabel">Running AIR pipeline…</div>
+      <div class="loading-sub" id="loadingSub">Semantic Layer → LLM generating AIR instruction</div>
+    </div>
+
+    <div id="errorState" class="error-state hidden">
+      <div class="error-icon">✗</div>
+      <div class="error-title" id="errorTitle">Generation failed</div>
+      <pre class="error-body" id="errorBody"></pre>
+    </div>
+
+    <iframe id="previewFrame" class="preview-frame hidden" sandbox="allow-scripts allow-same-origin"></iframe>
+  </main>
+
+  <!-- Right Panel: AIR Instruction + Stats -->
+  <aside class="right-panel">
+
+    <div class="card" id="tokenCard" style="display:none">
+      <div class="card-title">Token Statistics</div>
+      <div class="token-grid">
+        <div class="token-stat">
+          <div class="ts-label">AIR Tokens</div>
+          <div class="ts-val ts-green" id="tsAir">—</div>
+        </div>
+        <div class="token-stat">
+          <div class="ts-label">Direct Est.</div>
+          <div class="ts-val ts-muted" id="tsDirect">—</div>
+        </div>
+        <div class="token-stat">
+          <div class="ts-label">Reduction</div>
+          <div class="ts-val ts-accent" id="tsReduction">—</div>
+        </div>
+        <div class="token-stat">
+          <div class="ts-label">Latency</div>
+          <div class="ts-val" id="tsLatency">—</div>
+        </div>
+      </div>
+      <div class="reduction-bar-outer">
+        <div class="reduction-bar-inner" id="reductionBar" style="width:0%"></div>
+      </div>
+      <div id="repairBadge" class="repair-badge hidden"></div>
+    </div>
+
+    <div class="card" id="airCard" style="display:none">
+      <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;">
+        AIR Instruction
+        <button class="copy-mini-btn" onclick="copyAir()">Copy</button>
+      </div>
+      <pre class="air-json" id="airJson"></pre>
+    </div>
+
+    <div class="card" id="verifyCard" style="display:none">
+      <div class="card-title">Verification</div>
+      <div id="verifyStatus"></div>
+    </div>
+
+    <div class="card" style="font-size:0.75rem;color:var(--text-dim);line-height:1.7;">
+      <div style="font-weight:700;margin-bottom:6px;color:var(--text-muted);">How AIR works</div>
+      Layer 1 — LLM emits compact JSON spec (not code).<br>
+      Layer 2 — Runtime reconstructs full HTML from templates.<br>
+      Layer 3 — Sandbox verifies output; repairs if needed.<br>
+      Result — verified output delivered, not just generated.
+    </div>
+
+  </aside>
+</div>
+
+<script>
+const API = "http://localhost:5000/api";
+let lastHtml = "";
+let lastAir  = null;
+
+// ── Quick examples ─────────────────────────────────────────
+const EXAMPLES = {
+  chart:     "Bar chart of quarterly revenue 2025: Q1=120K, Q2=185K, Q3=140K, Q4=210K. Use blue colors and show the trend.",
+  pricing:   "Pricing page: Basic $9/month (5 projects, 10GB storage, email support), Pro $29/month highlighted (unlimited projects, 100GB, priority support, analytics), Enterprise custom pricing (SSO, SLA, dedicated support).",
+  form:      "Contact form with name, email, phone, subject dropdown (General / Support / Sales / Partnership), message textarea. Dark theme. Submit button: Send Message.",
+  deck:      "5-slide investor pitch: Title (TechAI - Revolutionizing Data), Problem (data teams waste 70% of time on manual work), Solution (AI-powered data pipeline), Traction ($2M ARR, 150 customers, 300% YoY growth), Ask ($5M Series A, 18-month runway).",
+  hero:      "Hero section for a developer productivity tool: headline 'Ship 10x Faster with AI', subheadline about eliminating boilerplate and automating repetitive code. Two CTAs: 'Start Free Trial' and 'Watch Demo'.",
+  email:     "Welcome email for new SaaS users of CloudBase. Headline: Welcome to CloudBase! Body: getting started guide, key features. CTA: Open Dashboard. Include a footer with unsubscribe link.",
+  dashboard: "SaaS analytics dashboard: Monthly Revenue $84,200 (+12.4%), Active Users 12,400 (+8.1%), Churn Rate 2.4% (-0.3%), NPS Score 67 (+5), ARR $1.01M (+18%), Support Tickets 34 (-22%).",
+  table:     "Data table of top 5 programming languages by popularity 2025: Language, Popularity %, Primary Use Case, Year Created. Include Python, JavaScript, Java, TypeScript, Rust.",
+};
+
+function setEx(k) {
+  document.getElementById("promptInput").value = EXAMPLES[k] || "";
+  document.getElementById("promptInput").focus();
+}
+
+// ── Generate ───────────────────────────────────────────────
+async function generate() {
+  const prompt = document.getElementById("promptInput").value.trim();
+  if (!prompt) { alert("Enter a prompt first."); return; }
+  const model  = document.getElementById("modelSelect").value;
+  const btn    = document.getElementById("generateBtn");
+
+  btn.disabled = true;
+  btn.textContent = "⏳ Generating…";
+  showLoading("Running AIR pipeline…", "Layer 1: LLM generating AIR instruction…");
+
+  // Reset panels
+  document.getElementById("tokenCard").style.display = "none";
+  document.getElementById("airCard").style.display   = "none";
+  document.getElementById("verifyCard").style.display = "none";
+  document.getElementById("pipelineStatus").classList.add("hidden");
+
+  try {
+    const res  = await fetch(`${API}/generate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      // Only send model if user explicitly chose one (not Auto)
+      body: JSON.stringify(model ? { prompt, model } : { prompt })
+    });
+    const data = await res.json();
+
+    if (!data.success && !data.html_output) {
+      showError(data.error || "Unknown error", data);
+    } else {
+      showResult(data);
+    }
+
+  } catch (e) {
+    showError(e.message.includes("fetch") ? "Cannot reach AIR server — is server.py running?" : e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "▶ Generate with AIR";
+  }
+}
+
+// ── UI state helpers ───────────────────────────────────────
+function hide(...ids) { ids.forEach(id => document.getElementById(id).classList.add("hidden")); }
+function show(...ids) { ids.forEach(id => document.getElementById(id).classList.remove("hidden")); }
+
+function showLoading(label, sub) {
+  hide("emptyState","errorState","previewFrame");
+  document.getElementById("loadingLabel").textContent = label;
+  document.getElementById("loadingSub").textContent   = sub;
+  show("loadingState");
+  document.getElementById("copyHtmlBtn").disabled = true;
+  document.getElementById("openNewBtn").disabled  = true;
+}
+
+function showError(msg, data) {
+  hide("loadingState","emptyState","previewFrame");
+  document.getElementById("errorTitle").textContent = msg;
+  document.getElementById("errorBody").textContent  = data ? JSON.stringify(data, null, 2) : "";
+  show("errorState");
+}
+
+function showResult(data) {
+  hide("loadingState","errorState","emptyState");
+
+  // Preview
+  lastHtml = data.html_output || "";
+  lastAir  = data.air_instruction;
+  const frame = document.getElementById("previewFrame");
+  frame.srcdoc = lastHtml;
+  show("previewFrame");
+  document.getElementById("copyHtmlBtn").disabled = false;
+  document.getElementById("openNewBtn").disabled  = false;
+
+  // Token stats
+  const s = data.token_stats || {};
+  document.getElementById("tsAir").textContent       = s.llm_air_tokens || s.air_total || "—";
+  document.getElementById("tsDirect").textContent    = s.direct_estimate || "—";
+  document.getElementById("tsReduction").textContent = s.reduction_percent != null ? s.reduction_percent + "%" : "—";
+  document.getElementById("tsLatency").textContent   = s.total_time_s != null ? s.total_time_s + "s" : "—";
+  const bar = document.getElementById("reductionBar");
+  bar.style.width = Math.min(100, s.reduction_percent || 0) + "%";
+  const repairBadge = document.getElementById("repairBadge");
+  if (data.repair_cycles > 0) {
+    repairBadge.textContent = `${data.repair_cycles} repair cycle${data.repair_cycles > 1 ? "s" : ""} executed`;
+    repairBadge.classList.remove("hidden");
+  } else {
+    repairBadge.classList.add("hidden");
+  }
+  document.getElementById("tokenCard").style.display = "block";
+
+  // AIR instruction
+  if (data.air_instruction) {
+    document.getElementById("airJson").textContent = JSON.stringify(data.air_instruction, null, 2);
+    document.getElementById("airCard").style.display = "block";
+  }
+
+  // Verification
+  const passed = data.success;
+  const vHTML  = passed
+    ? `<div class="verify-pass">✓ Verification passed — output is valid and ready for delivery</div>`
+    : `<div class="verify-fail">⚠ Verification issue: ${data.error || "Unknown"}</div>`;
+  document.getElementById("verifyStatus").innerHTML = vHTML;
+  document.getElementById("verifyCard").style.display = "block";
+
+  // Pipeline stages
+  if (data.stages && data.stages.length) {
+    const stageList = document.getElementById("stageList");
+    stageList.innerHTML = data.stages.map(s => {
+      const ok = s.status === "ok" || s.status === "pass";
+      const icon = ok ? "✓" : "✗";
+      const cls  = ok ? "stage-ok" : "stage-fail";
+      const extra = s.time_s != null ? ` (${s.time_s}s)` : "";
+      const cycle = s.cycle != null ? ` #${s.cycle}` : "";
+      return `<div class="stage-item ${cls}">${icon} ${s.layer}${cycle}${extra}</div>`;
+    }).join("");
+    document.getElementById("pipelineStatus").classList.remove("hidden");
+  }
+}
+
+// ── Actions ────────────────────────────────────────────────
+function copyHtml() {
+  navigator.clipboard.writeText(lastHtml).then(() => {
+    const btn = document.getElementById("copyHtmlBtn");
+    btn.textContent = "Copied!";
+    setTimeout(() => btn.textContent = "Copy HTML", 1500);
+  });
+}
+
+function copyAir() {
+  navigator.clipboard.writeText(JSON.stringify(lastAir, null, 2));
+}
+
+function openNew() {
+  const w = window.open("", "_blank");
+  w.document.write(lastHtml);
+  w.document.close();
+}
+
+// ── Health + Models ────────────────────────────────────────
+async function checkHealth() {
+  try {
+    const r    = await fetch(`${API}/health`);
+    const data = await r.json();
+    const dot  = document.getElementById("statusDot");
+    const txt  = document.getElementById("statusText");
+    if (data.lm_studio === "ok") {
+      dot.className  = "status-dot ok";
+      txt.textContent = `LM Studio OK — ${data.model}`;
+    } else {
+      dot.className  = "status-dot warn";
+      txt.textContent = "LM Studio offline";
+    }
+  } catch {
+    document.getElementById("statusDot").className  = "status-dot error";
+    document.getElementById("statusText").textContent = "Server offline";
+  }
+}
+
+async function loadModels() {
+  try {
+    const r    = await fetch(`${API}/models`);
+    const data = await r.json();
+    const sel  = document.getElementById("modelSelect");
+    const models = data.data || [];
+    // Always put "Auto" first — server will detect the active model.
+    // This prevents sending a name that might load a second model in LM Studio.
+    const autoOpt = `<option value="">Auto (use loaded model)</option>`;
+    sel.innerHTML = autoOpt + (models.length
+      ? models.map(m => `<option value="${m.id}">${m.id}</option>`).join("")
+      : "");
+  } catch {
+    document.getElementById("modelSelect").innerHTML = "<option value=\"\">Auto (use loaded model)</option>";
+  }
+}
+
+// ── Keyboard shortcut: Ctrl+Enter ──────────────────────────
+document.addEventListener("keydown", e => {
+  if ((e.ctrlKey || e.metaKey) && e.key === "Enter") generate();
+});
+
+// Init
+loadModels();
+checkHealth();
+setInterval(checkHealth, 15000);
+</script>
+
+</body>
+</html>
