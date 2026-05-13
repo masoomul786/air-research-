@@ -374,6 +374,10 @@ Results saved to `benchmark/results/`:
 
 ---
 
+## Benchmark Dashboard
+
+![AIR Dashboard](air_research/screenshots/screencapture-localhost-5000-benchmark-html-2026-05-13-23_31_06.png)
+
 ## License
 
 CC BY-NC-SA 4.0 — Attribution required. No commercial use without permission.
