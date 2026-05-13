@@ -376,4 +376,4 @@ Results saved to `benchmark/results/`:
 
 ## License
 
-CC BY-NC 4.0 — Attribution required. No commercial use without permission.
+CC BY-NC-SA 4.0 — Attribution required. No commercial use without permission.
